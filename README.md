@@ -11,8 +11,8 @@ You can see the exact modifications made for AMD compatibility [here](https://gi
 - **Numerical Stability:** Kept accumulation in `float32`.
 - **Optimization:** Triton autotuning added.
 
-<pre>
 ## Installation
+<pre>
 `cd ComfyUI/custom_nodes/ComfyUI-WanVideoWrapper/ultravico/`
 `rm -rf sageattn`
 `git clone https://github.com/0xDELUXA/ComfyUI-WanVideoWrapper-ultravico_AMD sageattn`
