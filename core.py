@@ -26,7 +26,7 @@ def sage_attention(
     window_width: int = 21,
     multi_factor: Optional[float] = None,
     entropy_factor: Optional[float] = None,
-    block_size : int = 32,  # Changed from 64 to 32 for AMD
+    block_size : int = 64,
     **kwargs
 ) -> torch.Tensor:
     dtype = qkv[0].dtype
@@ -49,13 +49,13 @@ def sage_attention(
     if q.dtype != k.dtype or q.dtype != v.dtype:
         k, v = k.to(q.dtype), v.to(q.dtype)
 
-    q_int8, q_scale, k_int8, k_scale = per_block_int8(q, k, sm_scale=sm_scale, tensor_layout=tensor_layout, BLKQ=block_size, BLKK=block_size)
+    q_int8, q_scale, k_int8, k_scale = per_block_int8(q, k, sm_scale=sm_scale, tensor_layout=tensor_layout, BLKQ=block_size, BLKK=32)
     del q, k
 
     o = attn_false(q_int8, k_int8, v, flags, block_bias, decay_mask, q_scale, k_scale,
         tensor_layout=tensor_layout, output_dtype=dtype, xpos_xi=xpos_xi, sigmoid_a=sigmoid_a,
         alpha_xpos_xi=alpha_xpos_xi, beta_xpos_xi=beta_xpos_xi,
-        BLOCK_M=block_size, BLOCK_N=block_size,
+        BLOCK_M=block_size, BLOCK_N=32,
         sink_width=sink_width,
         window_width=window_width,
         multi_factor=multi_factor,

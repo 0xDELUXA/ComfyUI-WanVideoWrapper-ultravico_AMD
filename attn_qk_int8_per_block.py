@@ -8,7 +8,7 @@ import triton.language as tl
 # Autotune configurations for AMD
 configs = [
     triton.Config(
-        {'BLOCK_M': 32, 'BLOCK_N': 32, 'STAGE': S, 'waves_per_eu': wpe},
+        {'BLOCK_M': 64, 'BLOCK_N': 32, 'STAGE': S, 'waves_per_eu': wpe},
         num_warps=nw,
         num_stages=ns
     )
@@ -23,13 +23,11 @@ def keep(conf):
     BLOCK_N = conf.kwargs["BLOCK_N"]
     BLOCK_AREA = BLOCK_M * BLOCK_N
 
-    if (BLOCK_AREA > 1024):
+    if (BLOCK_AREA > 4096):
         return False
     if (BLOCK_M < BLOCK_N):
         return False
     if (BLOCK_M//BLOCK_N >= 8):
-        return False
-    if (BLOCK_AREA >= 1024 and conf.num_warps != 2):
         return False
     if (BLOCK_AREA >= 2048 and conf.num_warps != 4):
         return False
@@ -192,7 +190,7 @@ def forward(q, k, v, flags, block_bias, decay_mask, q_scale, k_scale, tensor_lay
               sigmoid_a: tl.constexpr = 1.0,
               alpha_xpos_xi: tl.constexpr = 0.9999967941742395,
               beta_xpos_xi: tl.constexpr = 0.9999860536252945,
-              BLOCK_M: tl.constexpr = 32,
+              BLOCK_M: tl.constexpr = 64,
               BLOCK_N: tl.constexpr = 32,
               sink_width: tl.constexpr = 4,
               window_width: tl.constexpr = 16,
