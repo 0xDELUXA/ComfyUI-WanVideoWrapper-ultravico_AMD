@@ -49,13 +49,13 @@ def sage_attention(
     if q.dtype != k.dtype or q.dtype != v.dtype:
         k, v = k.to(q.dtype), v.to(q.dtype)
 
-    q_int8, q_scale, k_int8, k_scale = per_block_int8(q, k, sm_scale=sm_scale, tensor_layout=tensor_layout, BLKQ=block_size, BLKK=32)
+    q_int8, q_scale, k_int8, k_scale = per_block_int8(q, k, sm_scale=sm_scale, tensor_layout=tensor_layout, BLKQ=128, BLKK=64)
     del q, k
 
     o = attn_false(q_int8, k_int8, v, flags, block_bias, decay_mask, q_scale, k_scale,
         tensor_layout=tensor_layout, output_dtype=dtype, xpos_xi=xpos_xi, sigmoid_a=sigmoid_a,
         alpha_xpos_xi=alpha_xpos_xi, beta_xpos_xi=beta_xpos_xi,
-        BLOCK_M=block_size, BLOCK_N=32,
+        BLOCK_M=128, BLOCK_N=64,
         sink_width=sink_width,
         window_width=window_width,
         multi_factor=multi_factor,
