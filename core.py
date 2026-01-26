@@ -51,12 +51,6 @@ def sage_attention(
 
     q_int8, q_scale, k_int8, k_scale = per_block_int8(q, k, sm_scale=sm_scale, tensor_layout=tensor_layout, BLKQ=block_size, BLKK=block_size)
     
-    # DEBUG: Check for invalid values
-    print(f"q_scale min/max: {q_scale.min()}/{q_scale.max()}")
-    print(f"k_scale min/max: {k_scale.min()}/{k_scale.max()}")
-    print(f"q_scale has nan: {torch.isnan(q_scale).any()}")
-    print(f"k_scale has nan: {torch.isnan(k_scale).any()}")
-
     del q, k
 
     o = attn_false(q_int8, k_int8, v, flags, block_bias, decay_mask, q_scale, k_scale,

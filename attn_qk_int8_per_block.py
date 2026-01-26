@@ -1,5 +1,5 @@
 # https://github.com/thu-ml/DiT-Extrapolation/blob/ultra-wan/sageattn/attn_qk_int8_per_block.py
-# AMD compatible version - CORRECTED v2
+# AMD compatible version
 
 import torch
 import triton
