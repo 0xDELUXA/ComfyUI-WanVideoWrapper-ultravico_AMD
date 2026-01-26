@@ -1,4 +1,5 @@
 # source https://github.com/thu-ml/DiT-Extrapolation/blob/ultra-wan/sageattn/core.py
+# AMD compatible version
 
 import torch
 import triton.language as tl
@@ -25,7 +26,7 @@ def sage_attention(
     window_width: int = 21,
     multi_factor: Optional[float] = None,
     entropy_factor: Optional[float] = None,
-    block_size : int = 64,
+    block_size : int = 32,  # Changed from 64 to 32 for AMD
     **kwargs
 ) -> torch.Tensor:
     dtype = qkv[0].dtype
@@ -49,6 +50,13 @@ def sage_attention(
         k, v = k.to(q.dtype), v.to(q.dtype)
 
     q_int8, q_scale, k_int8, k_scale = per_block_int8(q, k, sm_scale=sm_scale, tensor_layout=tensor_layout, BLKQ=block_size, BLKK=block_size)
+    
+    # DEBUG: Check for invalid values
+    print(f"q_scale min/max: {q_scale.min()}/{q_scale.max()}")
+    print(f"k_scale min/max: {k_scale.min()}/{k_scale.max()}")
+    print(f"q_scale has nan: {torch.isnan(q_scale).any()}")
+    print(f"k_scale has nan: {torch.isnan(k_scale).any()}")
+
     del q, k
 
     o = attn_false(q_int8, k_int8, v, flags, block_bias, decay_mask, q_scale, k_scale,

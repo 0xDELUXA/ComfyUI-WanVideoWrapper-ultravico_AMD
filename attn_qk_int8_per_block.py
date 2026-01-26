@@ -1,8 +1,40 @@
 # https://github.com/thu-ml/DiT-Extrapolation/blob/ultra-wan/sageattn/attn_qk_int8_per_block.py
+# AMD compatible version - CORRECTED v2
 
 import torch
 import triton
 import triton.language as tl
+
+# Autotune configurations for AMD
+configs = [
+    triton.Config(
+        {'BLOCK_M': 32, 'BLOCK_N': 32, 'STAGE': S, 'waves_per_eu': wpe},
+        num_warps=nw,
+        num_stages=ns
+    )
+    for S in [1]
+    for wpe in [3, 4]
+    for nw in [2, 4]
+    for ns in [1]
+]
+
+def keep(conf):
+    BLOCK_M = conf.kwargs["BLOCK_M"]
+    BLOCK_N = conf.kwargs["BLOCK_N"]
+    BLOCK_AREA = BLOCK_M * BLOCK_N
+
+    if (BLOCK_AREA > 1024):
+        return False
+    if (BLOCK_M < BLOCK_N):
+        return False
+    if (BLOCK_M//BLOCK_N >= 8):
+        return False
+    if (BLOCK_AREA >= 1024 and conf.num_warps != 2):
+        return False
+    if (BLOCK_AREA >= 2048 and conf.num_warps != 4):
+        return False
+
+    return True
 
 
 @triton.jit
@@ -24,14 +56,12 @@ def _attn_fwd_inner(acc, l_i, m_i, q, q_scale, kv_len, current_flag,
                     entropy_factor: tl.constexpr = None,
                     ):
 
-
     lo, hi = 0, kv_len
     for start_n in range(lo, hi, BLOCK_N):
         start_n = tl.multiple_of(start_n, BLOCK_N)
         k_mask = offs_n[None, :] < (kv_len - start_n)
         k = tl.load(K_ptrs, mask = k_mask)
         k_scale = tl.load(K_scale_ptr)
-
 
         m = offs_m[:, None]
         n = start_n + offs_n
@@ -49,7 +79,6 @@ def _attn_fwd_inner(acc, l_i, m_i, q, q_scale, kv_len, current_flag,
         window3 = (m <= frame_tokens) & (n > window_width*frame_tokens)
         qk = tl.where(window3, -1e4, qk)
 
-
         m_ij = tl.maximum(m_i, tl.max(qk, 1))
         qk = qk - m_ij[:, None]
         p = tl.math.exp2(qk)
@@ -63,13 +92,20 @@ def _attn_fwd_inner(acc, l_i, m_i, q, q_scale, kv_len, current_flag,
         v = tl.load(V_ptrs, mask = offs_n[:, None] < (kv_len - start_n))
         p = p.to(tl.float16)
 
-        acc += tl.dot(p, v, out_dtype=tl.float16)
+        # Keep accumulation in float32 for numerical stability, convert p*v result
+        p_v = tl.dot(p, v)
+        acc = acc + p_v.to(tl.float32)
+        
         m_i = m_ij
         K_ptrs += BLOCK_N * stride_kn
         K_scale_ptr += 1
         V_ptrs += BLOCK_N * stride_vn
     return acc, l_i
 
+@triton.autotune(
+    list(filter(keep, configs)), 
+    key=['qo_len', 'kv_len', 'h_qo']
+)
 @triton.jit
 def _attn_fwd(Q, K, V, Q_scale, K_scale, Out,
               Block_bias, Decay_mask,
@@ -116,10 +152,7 @@ def _attn_fwd(Q, K, V, Q_scale, K_scale, Out,
     V_ptrs = V + (off_z * stride_vz + (off_h // num_kv_groups) * stride_vh) + offs_n[:, None] * stride_vn + offs_k[None, :]
     O_block_ptr = Out + (off_z * stride_oz + off_h * stride_oh) + offs_m[:, None] * stride_on + offs_k[None, :]
 
-    # # 计算block_bias指针
     Block_bias_ptrs = Block_bias + off_z * stride_bbz + off_h * stride_bbh
-
-    # 计算decay_mask指针
     Decay_mask_ptrs = Decay_mask + off_z * stride_dmz + off_h * stride_dmh
 
     m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float("inf")
@@ -154,8 +187,8 @@ def forward(q, k, v, flags, block_bias, decay_mask, q_scale, k_scale, tensor_lay
               sigmoid_a: tl.constexpr = 1.0,
               alpha_xpos_xi: tl.constexpr = 0.9999967941742395,
               beta_xpos_xi: tl.constexpr = 0.9999860536252945,
-              BLOCK_M: tl.constexpr = 128,
-              BLOCK_N: tl.constexpr = 128,
+              BLOCK_M: tl.constexpr = 32,
+              BLOCK_N: tl.constexpr = 32,
               sink_width: tl.constexpr = 4,
               window_width: tl.constexpr = 16,
               multi_factor: tl.constexpr = None,
@@ -182,15 +215,6 @@ def forward(q, k, v, flags, block_bias, decay_mask, q_scale, k_scale, tensor_lay
         stride_bz_o, stride_h_o, stride_seq_o = o.stride(0), o.stride(1), o.stride(2)
         stride_bbz, stride_bbh, stride_bm, stride_bn = block_bias.stride()
         stride_dmz, stride_dmh, stride_dm, stride_dn = decay_mask.stride()
-    # elif tensor_layout == "NHD":
-    #     b, qo_len, h_qo, head_dim = q.shape
-    #     _, kv_len, h_kv, _ = k.shape
-
-    #     stride_bz_q, stride_h_q, stride_seq_q = q.stride(0), q.stride(2), q.stride(1)
-    #     stride_bz_k, stride_h_k, stride_seq_k = k.stride(0), k.stride(2), k.stride(1)
-    #     stride_bz_v, stride_h_v, stride_seq_v = v.stride(0), v.stride(2), v.stride(1)
-    #     stride_bz_o, stride_h_o, stride_seq_o = o.stride(0), o.stride(2), o.stride(1)
-    #     stride_bbz, stride_bbh, stride_bm, stride_bn = block_bias.stride(0), block_bias.stride(2), block_bias.stride(1), block_bias.stride(3)
     else:
         raise ValueError(f"tensor_layout {tensor_layout} not supported")
 
@@ -199,7 +223,7 @@ def forward(q, k, v, flags, block_bias, decay_mask, q_scale, k_scale, tensor_lay
     HEAD_DIM_K = head_dim
     num_kv_groups = h_qo // h_kv
 
-    grid = (triton.cdiv(qo_len, BLOCK_M), h_qo, b)
+    grid = lambda META: (triton.cdiv(qo_len, META['BLOCK_M']), h_qo, b)
     _attn_fwd[grid](
         q, k, v, q_scale, k_scale, o,
         block_bias, decay_mask,
@@ -213,10 +237,7 @@ def forward(q, k, v, flags, block_bias, decay_mask, q_scale, k_scale, tensor_lay
         stride_dmz, stride_dmh, stride_dm, stride_dn,
         qo_len, kv_len,
         h_qo, num_kv_groups,
-        BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, HEAD_DIM=HEAD_DIM_K,
-        STAGE=stage,
-        num_warps=4 if head_dim == 64 else 8,
-        num_stages=3 if head_dim == 64 else 4,
+        HEAD_DIM=HEAD_DIM_K,
         xpos_xi=xpos_xi,
         frame_tokens=frame_tokens,
         sigmoid_a=sigmoid_a,

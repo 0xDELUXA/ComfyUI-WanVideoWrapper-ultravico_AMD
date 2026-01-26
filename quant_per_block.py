@@ -1,4 +1,5 @@
 # https://github.com/thu-ml/DiT-Extrapolation/blob/ultra-wan/sageattn/quant_per_block.py
+# AMD compatible version
 
 import torch
 import triton
@@ -32,7 +33,7 @@ def quant_per_block_int8_kernel(Input, Output, Scale, L,
     tl.store(output_ptrs, x_int8, mask=offs_n[:, None] < L)
     tl.store(scale_ptrs, scale)
 
-def per_block_int8(q, k, BLKQ=128, BLKK=64, sm_scale=None, tensor_layout="HND"):
+def per_block_int8(q, k, BLKQ=32, BLKK=32, sm_scale=None, tensor_layout="HND"):  # Changed from 128/64 to 32/16
     q_int8 = torch.empty(q.shape, dtype=torch.int8, device=q.device)
     k_int8 = torch.empty(k.shape, dtype=torch.int8, device=k.device)
 
