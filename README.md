@@ -11,7 +11,7 @@ You can see the exact modifications made for AMD compatibility [here](https://gi
 - **Numerical Stability:** Kept accumulation in `float32`.
 - **Optimization:** Triton autotuning added.
 
-## Tested on ROCm 7 with PyTorch and triton-windows.
+### Tested on ROCm 7 with PyTorch and triton-windows.
 
 ## Installation (PowerShell)
 <pre>
