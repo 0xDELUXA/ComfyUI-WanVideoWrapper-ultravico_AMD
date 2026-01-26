@@ -55,12 +55,14 @@ def _attn_fwd_inner(acc, l_i, m_i, q, q_scale, kv_len, current_flag,
                     entropy_factor: tl.constexpr = None,
                     ):
 
+
     lo, hi = 0, kv_len
     for start_n in range(lo, hi, BLOCK_N):
         start_n = tl.multiple_of(start_n, BLOCK_N)
         k_mask = offs_n[None, :] < (kv_len - start_n)
         k = tl.load(K_ptrs, mask = k_mask)
         k_scale = tl.load(K_scale_ptr)
+
 
         m = offs_m[:, None]
         n = start_n + offs_n
@@ -77,6 +79,7 @@ def _attn_fwd_inner(acc, l_i, m_i, q, q_scale, kv_len, current_flag,
 
         window3 = (m <= frame_tokens) & (n > window_width*frame_tokens)
         qk = tl.where(window3, -1e4, qk)
+
 
         m_ij = tl.maximum(m_i, tl.max(qk, 1))
         qk = qk - m_ij[:, None]
@@ -151,7 +154,10 @@ def _attn_fwd(Q, K, V, Q_scale, K_scale, Out,
     V_ptrs = V + (off_z * stride_vz + (off_h // num_kv_groups) * stride_vh) + offs_n[:, None] * stride_vn + offs_k[None, :]
     O_block_ptr = Out + (off_z * stride_oz + off_h * stride_oh) + offs_m[:, None] * stride_on + offs_k[None, :]
 
+    # # 计算block_bias指针
     Block_bias_ptrs = Block_bias + off_z * stride_bbz + off_h * stride_bbh
+
+    # 计算decay_mask指针
     Decay_mask_ptrs = Decay_mask + off_z * stride_dmz + off_h * stride_dmh
 
     m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float("inf")
