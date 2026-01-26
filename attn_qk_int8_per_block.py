@@ -36,7 +36,6 @@ def keep(conf):
 
     return True
 
-
 @triton.jit
 def _attn_fwd_inner(acc, l_i, m_i, q, q_scale, kv_len, current_flag,
                     K_ptrs, K_scale_ptr, V_ptrs, stride_kn, stride_vn,

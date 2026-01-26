@@ -50,7 +50,6 @@ def sage_attention(
         k, v = k.to(q.dtype), v.to(q.dtype)
 
     q_int8, q_scale, k_int8, k_scale = per_block_int8(q, k, sm_scale=sm_scale, tensor_layout=tensor_layout, BLKQ=block_size, BLKK=block_size)
-    
     del q, k
 
     o = attn_false(q_int8, k_int8, v, flags, block_bias, decay_mask, q_scale, k_scale,
